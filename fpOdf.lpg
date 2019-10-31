@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
   <ProjectGroup FileVersion="1">
-    <Targets Count="8">
+    <Targets Count="9">
       <Target0 FileName="package\fpodf.lpk"/>
       <Target1 FileName="examples\fpcTestfpOdf\fpcTestfpOdf.lpi">
         <BuildModes Count="3"/>
@@ -37,6 +37,10 @@
         <Mode2 Name="Debug"/>
         <Mode3 Name="Release"/>
       </Target7>
+      <Target8 FileName="examples\SearchAndReplace\OdfSearchAndReplace.lpi">
+        <BuildModes Count="1"/>
+        <Mode1 Name="Default"/>
+      </Target8>
     </Targets>
   </ProjectGroup>
 </CONFIG>
