@@ -31,9 +31,11 @@ const
      cName = 'Name';
      cAge = 'Age';
 
-     { TODO : Windows Path }
+     {$ifndef Windows}
      cOutputDir = '/tmp/';
-
+     {$else}
+     cOutputDir = '..\..\output\';
+     {$endif}
      cOutputFile = cOutputDir + 'ReplaceFieldsExample.fodt';
 
 var
