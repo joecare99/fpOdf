@@ -545,7 +545,7 @@ type
           property TextContent read GetTextContent write OdfSetTextContent;
     end;
 
-    { TOdfParagraph }
+     { TOdfParagraph }
 
     TOdfParagraph = class(TOdfContent)
     private
@@ -556,6 +556,18 @@ type
           //p1-7.4.15
           { TODO : Text input can also be included on Span, oetTextH, etc }
           function AddTextInput(ADescription: string = ''): TOdfElement;
+    end;
+
+    { TOdfSection }
+
+    TOdfSection = class(TOdfElement)
+    private
+      function GetDocument: TOdfDocument;
+    protected
+      property Document:TOdfDocument read GetDocument ;
+    public
+      function AddParagraph(ATextStyleName: String): TOdfParagraph;
+      function AddHeadline(aLevel: integer): TOdfContent;
     end;
 
 
@@ -605,10 +617,11 @@ type
           constructor Create;
           Procedure Clear; override;
           { TODO : Replace AddParagraph, param ATextSytleName, with A Style Object or interface}
+          function AddSection(aSectionName,ATextStyleName: String): TOdfSection;
           function AddParagraph(ATextStyleName: String): TOdfParagraph;
           function AddHeadline(aLevel: integer): TOdfContent;
           function AddAutomaticStyle:TOdfStyleStyle;overload;
-          function AddAutomaticStyle(aName:string):TOdfStyleStyle;overload;
+          function AddAutomaticStyle(aName:string;aFamily: TStyleFamilyValue=sfvText):TOdfStyleStyle;overload;
           function AddStyle(aName: String; aFamily: TStyleFamilyValue): TOdfStyleStyle;
             overload;
           function SearchText(AText: string; out FoundAt: TDOMText): boolean; overload;
@@ -931,6 +944,81 @@ begin
          Add(et);
 end;
 
+const CSolid = 'solid';
+     CAuto='auto';
+     CFontColor='font-color';
+     CSingle='single';
+     CSimple='simple';
+     CClassText='text';
+     CStyleHeading='Heading';
+     CStyleHeadingStb='Heading_20_';
+     CStyleTextBody='Text_20_body';
+     CTextBodyDis='Text body';
+     CStyleStandard='Standard';
+
+{ TOdfSection }
+
+function TOdfSection.GetDocument: TOdfDocument;
+var
+  lValue: PtrInt;
+begin
+   TryStrToInt64(TDOMElement(TXMLDocument(OwnerDocument).FirstChild).GetAttribute('Owner'),lValue);
+   result := TOdfDocument(TObject(lValue));
+end;
+
+function TOdfSection.AddParagraph(ATextStyleName: String): TOdfParagraph;
+begin
+  result:=TOdfParagraph(CreateOdfElement(oetTextP,TOdfParagraph,TxmlDocument(OwnerDocument)));
+  result.SetAttribute(oatTextStyleName, ATextStyleName);
+  AppendChild(result);
+end;
+
+function TOdfSection.AddHeadline(aLevel: integer): TOdfContent;
+var
+  vStyle, lParaStyle: TOdfElement;
+begin
+  result:=TOdfContent(CreateOdfElement(oetTextH,TOdfContent,TxmlDocument(OwnerDocument)));
+  result.SetAttribute(oatTextStyleName, CStyleHeadingStb+Inttostr(aLevel));
+  result.SetAttribute(oatTextOutlineLevel, Inttostr(aLevel));
+  AppendChild(result);
+
+  lParaStyle:= TOdfElement(TOdfTextDocument(Document).Styles).Find(CStyleTextBody) ;
+  if not assigned(lParaStyle) then
+    begin
+         vStyle:=Document.CreateOdfElement(oetStyleStyle);
+             with TOdfStyleStyle(vStyle) do
+             begin
+                  OdfStyleName:=CStyleTextBody;
+                  OdfStyleDisplayName:=CTextBodyDis;
+                  SetStyleFamily(sfvParagraph);
+                  OdfStyleParentStyleName:=CStyleStandard;
+                  OdfStyleClass:=CClassText;
+             end;
+             TOdfTextDocument(Document).Styles.AppendChild(vStyle);
+
+    end;
+
+  lParaStyle:= TOdfElement(TOdfTextDocument(Document).Styles).Find(CStyleHeadingStb+Inttostr(aLevel)) ;
+  if not assigned(lParaStyle) then
+    begin
+         vStyle:=Document.CreateOdfElement(oetStyleStyle);
+             with TOdfStyleStyle(vStyle) do
+             begin
+                  OdfStyleName:=CStyleHeadingStb+Inttostr(aLevel);
+                  OdfStyleDisplayName:=CStyleHeading+' '+Inttostr(aLevel);
+                  SetStyleFamily(sfvParagraph);
+                  OdfStyleParentStyleName:=CStyleHeading;
+                  OdfStyleNextStyleName:=CStyleTextBody;
+                  OdfStyleDefaultOutlineLevel:=inttostr(aLevel);
+                  OdfStyleClass:=CClassText;
+                  AppendOdfElement(oetStyleTextProperties,oatFoFontSize,inttostr(156-trunc(sqrt(aLevel)*25))+'%')
+                    .SetAttribute(oatFoFontWeight,OdfFontWeightValues[fwBold]);
+             end;
+             TOdfTextDocument(Document).Styles.AppendChild(vStyle);
+
+    end;
+end;
+
 
 { TOdfParagraph }
 
@@ -950,6 +1038,7 @@ begin
      else
          AppendOdfElement(oetTextTextInput, oatTextDescription, ADescription);
 end;
+
 { TBookMark }
 
 class function TBookMark.CreateBookmark(doc: TXMLDocument; AText,
@@ -978,18 +1067,6 @@ begin
   lBookmark.SetAttribute(oatTextName,aBMName);
 end;
 
-const CSolid = 'solid';
-     CAuto='auto';
-     CFontColor='font-color';
-     CSingle='single';
-     CSimple='simple';
-     CClassText='text';
-     CStyleHeading='Heading';
-     CStyleHeadingStb='Heading_20_';
-     CStyleTextBody='Text_20_body';
-     CTextBodyDis='Text body';
-     CStyleStandard='Standard';
-
 { THyperLink }
 
 class function THyperLink.CreateLink(doc: TXMLDocument; AText, aBMName: string
@@ -998,7 +1075,8 @@ begin
   result:=THyperLink(CreateOdfElement(oetTextA, THyperLink, doc));
   Result.SetAttribute(oatXlinkType,CSimple);
   Result.SetAttribute(oatXlinkHref,'#'+aBMName);
-  result.TextContent:=AText;
+  if AText<>'' then
+    result.TextContent:=AText;
 end;
 
 procedure THyperLink.SetLink(aBMName: string);
@@ -1142,7 +1220,7 @@ end;
 
 function TOdfContent.AddNBSpace(FontStyles: TFontStyles): TOdfContent;
 begin
-  result := AddSpan('',FontStyles);
+  result := AddSpan(' ',FontStyles);
 end;
 
 function TOdfContent.AddTab(FontStyles: TFontStyles): TOdfContent;
@@ -1175,8 +1253,13 @@ end;
 function TOdfContent.AddLink(AText: string; FontStyles: TFontStyles;
   aBMName: string): THyperLink;
 begin
-     result := THyperLink.CreateLink(self.OwnerDocument as TXMLDocument,AText,aBMName);
-     result.SetStyle(FontStyles);
+     if FontStyles=[] then
+       result := THyperLink.CreateLink(self.OwnerDocument as TXMLDocument,AText,aBMName)
+     else
+       begin
+         result := THyperLink.CreateLink(self.OwnerDocument as TXMLDocument,'',aBMName);
+          result.AddSpan(AText,FontStyles);
+       end;
      AppendChild(result);
 end;
 
@@ -1320,58 +1403,24 @@ begin
   GenerateAutoStyles;
 end;
 
+function TOdfTextDocument.AddSection(aSectionName, ATextStyleName: String
+  ): TOdfSection;
+begin
+  result:=TOdfSection(CreateOdfElement(oetTextSection));
+  result.SetAttribute(oatTextName, aSectionName);
+  result.SetAttribute(oatTextStyleName, ATextStyleName);
+  FText.AppendChild(result);
+end;
+
 function TOdfTextDocument.AddParagraph(ATextStyleName: String): TOdfParagraph;
 begin
-     result:=TOdfParagraph(CreateOdfElement(oetTextP));
-     result.SetAttribute(oatTextStyleName, ATextStyleName);
-     FText.AppendChild(result);
+  TOdfSection(FText).AddParagraph(ATextStyleName);
 end;
 
 function TOdfTextDocument.AddHeadline(aLevel: integer): TOdfContent;
-var
 
-  vStyle, lParaStyle: TOdfElement;
 begin
-  result:=TOdfContent(CreateOdfElement(oetTextH));
-  result.SetAttribute(oatTextStyleName, CStyleHeadingStb+Inttostr(aLevel));
-  result.SetAttribute(oatTextOutlineLevel, Inttostr(aLevel));
-  FText.AppendChild(result);
-
-  lParaStyle:= TOdfElement(FStyles).Find(CStyleTextBody) ;
-  if not assigned(lParaStyle) then
-    begin
-         vStyle:=CreateOdfElement(oetStyleStyle);
-             with TOdfStyleStyle(vStyle) do
-             begin
-                  OdfStyleName:=CStyleTextBody;
-                  OdfStyleDisplayName:=CTextBodyDis;
-                  SetStyleFamily(sfvParagraph);
-                  OdfStyleParentStyleName:=CStyleStandard;
-                  OdfStyleClass:=CClassText;
-             end;
-             FStyles.AppendChild(vStyle);
-
-    end;
-
-  lParaStyle:= TOdfElement(FStyles).Find(CStyleHeadingStb+Inttostr(aLevel)) ;
-  if not assigned(lParaStyle) then
-    begin
-         vStyle:=CreateOdfElement(oetStyleStyle);
-             with TOdfStyleStyle(vStyle) do
-             begin
-                  OdfStyleName:=CStyleHeadingStb+Inttostr(aLevel);
-                  OdfStyleDisplayName:=CStyleHeading+' '+Inttostr(aLevel);
-                  SetStyleFamily(sfvParagraph);
-                  OdfStyleParentStyleName:=CStyleHeading;
-                  OdfStyleNextStyleName:=CStyleTextBody;
-                  OdfStyleDefaultOutlineLevel:=inttostr(aLevel);
-                  OdfStyleClass:=CClassText;
-                  AppendOdfElement(oetStyleTextProperties,oatFoFontSize,inttostr(156-trunc(sqrt(aLevel)*25))+'%')
-                    .SetAttribute(oatFoFontWeight,OdfFontWeightValues[fwBold]);
-             end;
-             FStyles.AppendChild(vStyle);
-
-    end;
+  TodfSection(Ftext).AddHeadline(aLevel);
 end;
 
 function TOdfTextDocument.AddAutomaticStyle: TOdfStyleStyle;
@@ -1379,17 +1428,22 @@ begin
      result:=AddAutomaticStyle('TS'+inttostr(FAutomaticStyles.GetChildCount));
 end;
 
-function TOdfTextDocument.AddAutomaticStyle(aName: string): TOdfStyleStyle;
+function TOdfTextDocument.AddAutomaticStyle(aName: string;
+  aFamily: TStyleFamilyValue): TOdfStyleStyle;
 
 begin
-     result:=CreateStyle(aName,sfvText);
+     result:=CreateStyle(aName,aFamily);
      FAutomaticStyles.AppendChild(result);
 end;
 
 function TOdfTextDocument.AddStyle(aName:String;aFamily:TStyleFamilyValue): TOdfStyleStyle;
 begin
+  Result := TOdfStyleStyle(TOdfElement(FStyles).Find(aName));
+  if not assigned(result) then
+    begin
      result:=CreateStyle(aName,aFamily);
      FStyles.AppendChild(result);
+    end;
 end;
 
 
@@ -2489,12 +2543,13 @@ end;
 procedure TOdfDocument.InitXmlDocument;
 var
    e: TOdfElement;
+   FOwnerAttr: TDOMAttr;
 begin
      FXmlDocument:=TXMLDocument.Create;
 
      e:=TOdfElement.CreateOdfElement(oetOfficeDocument, FXmlDocument);
      FXmlDocument.AppendChild(e);
-
+     TDOMElement(e).SetAttribute('Owner',inttostr(ptrint(self)));
      OdfXmlSetDefaultAtts(FXmlDocument);
 
      with e do
