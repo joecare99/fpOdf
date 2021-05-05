@@ -63,12 +63,15 @@ const
      cNone = '<NONE>';
      cFileContent = 'content.xml';
      cFileStyles = 'styles.xml';
+     cFileMeta = 'meta.xml';
+     cFileSettings = 'settings.xml';
      cFileMimetype = 'mimetype';
      cIsoDateFormat = 'yyyy-mm-dd"T"hh:nn:ss'; //Is defined somewhere at fcl?
-     cMetaGenerator = 'fpOdf 0.1'; { TODO : Need to change to a proper format,
+     cMetaGenerator = 'fpOdf 0.2'; { TODO : Need to change to a proper format,
                                             as specified at p1-4.3.2.1 }
 
      cUrnOpenDocument = 'urn:oasis:names:tc:opendocument:xmlns:';
+     cUrnDocumentFoundationExperimental = 'urn:org:documentfoundation:names:experimental:office:xmlns:';
 
      cUrlOasis = 'http://docs.oasis-open.org/';
      cUriOffice12Meta = cUrlOasis + 'ns/office/1.2/meta/';
@@ -85,7 +88,7 @@ type
                      onsPresentation, onsSvg, onsText, onsChart, onsTable,
                      onsForm, onsXforms, onsDraw, onsMath, onsDr3d, onsNumber,
                      onsAnim, onsDb, onsXlink, onsXml, onsFo, onsSmil,
-                     onsXhtml, onsPkg, onsOf);
+                     onsXhtml, onsPkg, onsOf,onsLoExt);
 
     TOdfNamespaces = set of TOdfNamespace;
 
@@ -119,7 +122,8 @@ type
                     'smil',
                     'xhtml',
                     'pkg',
-                    'of');
+                    'of',
+                    'LoExt');
 
          OdfNamespaceURIs: array[TOdfNamespace] of String = (cNone,
                     cUrnOpenDocument + 'office:1.0',
@@ -150,7 +154,8 @@ type
                     cUrnOpenDocument + 'smil-compatible:1.0',
                     cUrlW3 + '1999/xhtml',
                     cUriOffice12Meta + 'pkg#',
-                    cUrnOpenDocument + 'of:1.2');
+                    cUrnOpenDocument + 'of:1.2',
+                    cUrnDocumentFoundationExperimental+'loext:1.0');
 
          function GetURI(ns: TOdfNamespace): string;
          function OdfGetNsUri(APrefix: string): string;
@@ -618,6 +623,7 @@ type
           Procedure Clear; override;
           { TODO : Replace AddParagraph, param ATextSytleName, with A Style Object or interface}
           function AddSection(aSectionName,ATextStyleName: String): TOdfSection;
+          function AddMasterStyle: TOdfStyleStyle;
           function AddParagraph(ATextStyleName: String): TOdfParagraph;
           function AddHeadline(aLevel: integer): TOdfContent;
           function AddAutomaticStyle:TOdfStyleStyle;overload;
@@ -1350,8 +1356,12 @@ procedure TOdfTextDocument.InitBodyContent;
 begin
      if Assigned(FText)
      then
-         FreeAndNil(FText);
+        try
+           // Prüfen warum Ftext sich ändert
+           FreeAndNil(FText);
+        except
 
+        end;
      FText:=OdfGetElement(oetOfficeText, FBody);
 end;
 
@@ -1410,6 +1420,21 @@ begin
   result.SetAttribute(oatTextName, aSectionName);
   result.SetAttribute(oatTextStyleName, ATextStyleName);
   FText.AppendChild(result);
+end;
+
+function TOdfTextDocument.AddMasterStyle: TOdfStyleStyle;
+begin
+  Result := TOdfStyleStyle(TOdfElement(FMasterStyles).Find('Standard'));
+  if not assigned(result) then
+    begin
+      result:=TOdfStyleStyle(CreateOdfElement(oetStyleMasterPage));
+      with result do
+         begin
+              OdfStyleName:='Standard';
+              OdfStyleFamily:='';
+         end;
+     FMasterStyles.AppendChild(result);
+    end;
 end;
 
 function TOdfTextDocument.AddParagraph(ATextStyleName: String): TOdfParagraph;
@@ -1517,6 +1542,7 @@ class function TOdfElement.CreateOdfElement(AType: TElementType;
                                             Doc: TXMLDocument): TOdfElement;
 var
    vQname, vUri: string;
+   ll: TDomElement;
 begin
      vQname:=OdfGetElementQName(AType, vUri);
 
@@ -1524,7 +1550,13 @@ begin
      result:=(doc.CreateElementNS(vUri, vQname, AClass) as aclass);
      {$IFDEF fpodf_debug}WriteLn(result.ClassName);{$ENDIF}
      {$else}
-     result:=TOdfElement(doc.CreateElementNS(vUri, vQname));
+     result := AClass.Create(doc);
+     ll := doc.CreateElementNS(vUri, vQname);
+     result.FNSI := ll.NSI;
+     result.NamespaceURI;
+     FreeAndNil(ll);
+     Include(Result.FFlags, nfLevel2);
+     Result.AttachDefaultAttrs;
      {$endif}
 end;
 
@@ -2678,7 +2710,7 @@ begin
 
      TempDir:=IncludeTrailingPathDelimiter(TempDir);
 
-     mt:=OdfGetMimeTypeFromFile(TempDir + 'mimetype');
+     mt:=OdfGetMimeTypeFromFile(TempDir + cFileMimetype);
 
      case mt of
           omtText: result:=TOdfTextDocument.Create;
@@ -2715,7 +2747,7 @@ begin
      ReorderElements(AOdf);
      OdfXmlSetDefaultAtts(AOdf.XmlDocument);
      OdfElementSetNamespaceAtt(AOdf.XmlDocument.DocumentElement,
-          [onsStyle, onsFo, onsSvg]);
+          [onsStyle, onsFo, onsSvg, onsText]);
      OdfWriteXmlToFile(AOdf.XmlDocument, AFilename);
 end;
 
@@ -3323,11 +3355,11 @@ begin
                          RootElement:=oetOfficeDocumentStyles;
                     end;
           ofMeta: begin
-                       Filename:='meta.xml';
+                       Filename:=cFileMeta;
                        RootElement:=oetOfficeDocumentMeta;
                   end;
           ofSettings: begin
-                           Filename:='settings.xml';
+                           Filename:=cFileSettings;
                            RootElement:=oetOfficeDocumentSettings;
                       end;
 

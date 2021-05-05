@@ -119,7 +119,7 @@
     <Version Value="11"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="..\..\bin\$(TargetCPU)-$(TargetOS)\ImprovedDemo"/>
+      <Filename Value="..\..\bin\$(TargetCPU)-$(TargetOS)\$NameOnly($Project(Infofile))"/>
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>

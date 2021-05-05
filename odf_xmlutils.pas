@@ -51,15 +51,20 @@ uses
 
   ;
 
+type TXmlWriterProc=Procedure(ADoc: TXMLDocument; AFilename: string);
 
 procedure OdfWriteXmlToFile(ADoc: TXMLDocument;  AFilename: string);
 
 function OdfAttributesAsStrings(e: TDOMElement; OnlyNames: boolean = true): TStrings;
 
+var XmlWriterProc : TXmlWriterProc;
 implementation
 
 procedure OdfWriteXmlToFile(ADoc: TXMLDocument;  AFilename: string);
 begin
+     if assigned(XmlWriterProc) then
+         XmlWriterProc(ADoc,AFilename)
+     else
      {$IfDef UseStaxWriter}
             XmlStreamWrite(ADoc, AFilename, 'utf-8', '1.0');
      {$Else}

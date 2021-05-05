@@ -42,8 +42,6 @@ var
    doc: TOdfTextDocument;
    p: TOdfParagraph;
 
-   e: TOdfElement;
-
 procedure AddField(AFieldName, ADescription: string);
 var
    e: TOdfElement;
