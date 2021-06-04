@@ -1358,7 +1358,7 @@ begin
      then
         try
            // Prüfen warum Ftext sich ändert
-           FreeAndNil(FText);
+  //         FreeAndNil(FText);
         except
 
         end;
@@ -1888,6 +1888,7 @@ begin
         Parser := TDOMParser.Create;
         Parser.Options.Namespaces:=True;
         Parser.Options.IgnoreComments:=True;
+        parser.Options.PreserveWhitespace:=true;
 
         Parser.Parse(Src, result);
      finally
