@@ -2390,10 +2390,10 @@ var
                   CloneElements(AOdf.XmlDocument.DocumentElement, vRoot,
                      vChildren);
 
-                  nsSet:=[onsStyle, onsFo, onsSvg];
+                  nsSet:=[onsStyle, onsFo, onsSvg, onsGrddl];
 
                   case f of
-                       ofContent: nsSet:=nsSet + [onsText];//Include(nsSet, onsText);
+                       ofContent: nsSet:=nsSet + [onsText, onsXlink];//Include(nsSet, onsText);
                        ofMeta, ofSettings   : nsSet:=[];
                   end;
              end;
@@ -2584,6 +2584,8 @@ begin
      FXmlDocument.AppendChild(e);
      TDOMElement(e).SetAttribute('Owner',inttostr(ptrint(self)));
      OdfXmlSetDefaultAtts(FXmlDocument);
+     OdfElementSetNamespaceAtt(FXmlDocument.DocumentElement,
+          [onsStyle, onsFo, onsSvg, onsText, onsGrddl, onsXlink, onsOffice]);
 
      with e do
      begin
@@ -2746,9 +2748,7 @@ class procedure TOdfDocument.SaveToSingleXml(AOdf: TOdfDocument;
   AFilename: string);
 begin
      ReorderElements(AOdf);
-     OdfXmlSetDefaultAtts(AOdf.XmlDocument);
-     OdfElementSetNamespaceAtt(AOdf.XmlDocument.DocumentElement,
-          [onsStyle, onsFo, onsSvg, onsText]);
+(*   *)
      OdfWriteXmlToFile(AOdf.XmlDocument, AFilename);
 end;
 
