@@ -342,6 +342,7 @@ type
                                        AValue: string): TOdfElement;
           function OdfGetFirstElement: TOdfElement;
           function HasOdfElement(AType: TElementType): boolean;
+          function FindOdfElement(AType: TElementType): TOdfElement;
 
           function Find(aName: String;recursive:boolean=false): TOdfElement;
           function GetAttribute(AType: TAttributeType): TDOMAttr;
@@ -436,8 +437,12 @@ type
            function StylesUsed(AParent: TDomElement): TStrings;
 
     private
+      FCountry: String;
+      FLanguage: String;
            class function ParseXmlFile(AStream: TStream): TXMLDocument;
            class procedure ReadPackage(ADir: String; AOdf: TOdfDocument);
+           procedure SetCountry(const AValue: String);
+           procedure SetLanguage(const AValue: String);
            procedure SetXmlDocument(AValue: TXMLDocument);
            class procedure WritePackage(DestFile: String;
                                         AOdf: TOdfDocument;
@@ -514,6 +519,8 @@ type
             AFontStyle: TOdfFontStyle; AFontWeigth: TOdfFontWeight;
             AStyleFamily: string): TStrings;
 
+          property Language:String read FLanguage write SetLanguage;
+          property Country:String read FCountry write SetCountry;
           property Settings: TDOMElement read FSettings write FSettings;
           property Scripts: TDOMElement read FScripts write FScripts;
           property FontFaceDecls: TDOMElement read FFontFaceDecls write FFontFaceDecls;
@@ -537,15 +544,17 @@ type
 
     public
           //p1-6.1.1
-          Procedure AppendText(aText:String);
+          procedure AppendText(aText: UTF8String);
           function AddLineBreak: TOdfContent;
           function AddNBSpace(FontStyles: TFontStyles): TOdfContent;
           function AddTab(FontStyles: TFontStyles): TOdfContent;
-          function AddSpan(AText: string; FontStyles: TFontStyles): TSpan;overload;
-          function AddSpan(AText: string; aFont: TFont;const doc: TOdfDocument): TSpan;
+          function AddSpan(AText: UTF8String; FontStyles: TFontStyles): TSpan;overload;
+          function AddSpan(AText: UTF8String; aFont: TFont;const doc: TOdfDocument): TSpan;
                    overload;
-          function AddSpan(AText: string; aStyle: string): TSpan;overload;
-          function AddLink(AText: string; FontStyles: TFontStyles;aBMName:string): THyperLink;
+          function AddSpan(AText: UTF8String; aStyle: string): TSpan;overload;
+          function AddLink(AText: UTF8String; FontStyles: TFontStyles; aBMName: string
+            ): THyperLink;
+          function GetStyle:TOdfStyleStyle;
           function GetCharacterContent(Recursive: boolean = true): string;
           property TextContent read GetTextContent write OdfSetTextContent;
     end;
@@ -573,6 +582,7 @@ type
     public
       function AddParagraph(ATextStyleName: String): TOdfParagraph;
       function AddHeadline(aLevel: integer): TOdfContent;
+      function AddTOC(aName: string;aLevel:integer): TOdfContent;
     end;
 
 
@@ -582,7 +592,7 @@ type
     private
 
     public
-          class function CreateSpan(doc: TXMLDocument; AText: string): TSpan;
+          class function CreateSpan(doc: TXMLDocument; AText: UTF8String): TSpan;
           procedure SetStyle(fs: TFontStyles);overload;
           procedure SetStyle(const doc: TOdfDocument; aFont: TFont); overload;
           procedure SetStyle(aStyleName: string);overload;
@@ -613,6 +623,7 @@ type
 
     TOdfTextDocument = class(TOdfDocument)
     private
+      FMasterPageProp: TOdfElement;
            FText: TDOMElement;
            procedure InitXmlDocument; override;
 
@@ -626,17 +637,22 @@ type
           function AddMasterStyle: TOdfStyleStyle;
           function AddParagraph(ATextStyleName: String): TOdfParagraph;
           function AddHeadline(aLevel: integer): TOdfContent;
+          function AddTOC(aName: string; aLevel: integer): TOdfContent;
           function AddAutomaticStyle:TOdfStyleStyle;overload;
           function AddAutomaticStyle(aName:string;aFamily: TStyleFamilyValue=sfvText):TOdfStyleStyle;overload;
           function AddStyle(aName: String; aFamily: TStyleFamilyValue): TOdfStyleStyle;
             overload;
+          function AddFontFace(StyleName, SvgFontFamily, FontFamilyGeneric,
+  FontPitch: string):Todfelement;
           function SearchText(AText: string; out FoundAt: TDOMText): boolean; overload;
           function SearchText(AText: string; out FoundAt: TDOMText;
             out AParagraph: TOdfParagraph): boolean; overload;
 
           { TODO : Needed: A function that searches a Style using its name  }
+          function SearchStyle(aStyle:string):TodfStyleStyle;
 
           property Text: TDOMElement read FText write FText;
+          property MasterPageProp:TOdfElement read FMasterPageProp;
     end;
 
     TDefaultStyle = class(TOdfElement)
@@ -827,7 +843,7 @@ var
    SpaceFound: boolean;
    i, index, vTextLength: PtrInt;
 
-   function GetSegment2: string;
+   function GetSegment2: utf8string;
    begin
         if NoSpaces>0
         then
@@ -868,6 +884,8 @@ begin
                                  else
                                      SpaceFound:=true;
                             end;
+               else
+                 SpaceFound:=false;
           end;
 
           if result = oetNone
@@ -1025,6 +1043,41 @@ begin
     end;
 end;
 
+function TOdfSection.AddTOC(aName: string; aLevel: integer): TOdfContent;
+var
+  lTOCTempl, lTocEntry, l: TOdfElement;
+  i: Integer;
+begin
+  result:=TOdfContent(CreateOdfElement(oetTextTableOfContent,TOdfContent,TxmlDocument(OwnerDocument)));
+  result.SetAttribute(oatTextProtected, 'true');
+  result.SetAttribute(oatTextName, aName+'1');
+  AppendChild(result);
+
+  lTOCTempl := CreateOdfElement(oetTextTableOfContentSource,TxmlDocument(OwnerDocument));
+  result.AppendChild(lTOCTempl);
+  ltoctempl.SetAttribute(oatTextOutlineLevel,inttostr(aLevel));
+
+  lTocEntry := CreateOdfElement(oetTextIndexTitleTemplate,TxmlDocument(OwnerDocument));
+  lTOCTempl.AppendChild(lTocEntry);
+  lTocEntry.SetTextContent(aName);
+
+  for i := 1 to alevel do
+    begin
+         lTocEntry := CreateOdfElement(oetTextTableOfContentEntryTemplate,TxmlDocument(OwnerDocument));
+         lTOCTempl.AppendChild(lTocEntry);
+         lTocEntry.SetAttribute(oatTextOutlineLevel,inttostr(i));
+
+         ltocEntry.AppendOdfElement(oetTextIndexEntryLinkStart);
+         ltocEntry.AppendOdfElement(oetTextIndexEntryChapter);
+         ltocEntry.AppendOdfElement(oetTextIndexEntryText);
+        l:= ltocEntry.AppendOdfElement(oetTextIndexEntryTabStop);
+        l.SetAttributes([oatStyleType,oatStyleLeaderChar],
+          ['right','.']);
+        ltocEntry.AppendOdfElement(oetTextIndexEntryPageNumber);
+        ltocEntry.AppendOdfElement(oetTextIndexEntryLinkEnd);
+    end;
+end;
+
 
 { TOdfParagraph }
 
@@ -1165,7 +1218,7 @@ begin
 end;
 
 
-class function TSpan.CreateSpan(doc: TXMLDocument; AText: string): TSpan;
+class function TSpan.CreateSpan(doc: TXMLDocument; AText: UTF8String): TSpan;
 begin
      result:=TSpan(CreateOdfElement(oetTextSpan, TSpan, doc));
      result.TextContent:=AText;
@@ -1185,7 +1238,7 @@ begin
      AppendText(AValue);
 end;
 
-procedure TOdfContent.AppendText(aText: String);
+procedure TOdfContent.AppendText(aText: UTF8String);
 
 var
    et: TElementType;
@@ -1234,14 +1287,14 @@ begin
   result := TOdfContent(AppendOdfElement(oetTextTab,TOdfContent));
 end;
 
-function TOdfContent.AddSpan(AText: string; FontStyles: TFontStyles): TSpan;
+function TOdfContent.AddSpan(AText: UTF8String; FontStyles: TFontStyles): TSpan;
 begin
      result:=TSpan.CreateSpan(self.OwnerDocument as TXMLDocument, AText);
      result.SetStyle(FontStyles);
      AppendChild(result);
 end;
 
-function TOdfContent.AddSpan(AText: string; aFont: TFont;
+function TOdfContent.AddSpan(AText: UTF8String; aFont: TFont;
   const doc: TOdfDocument): TSpan;
 begin
      result:=TSpan.CreateSpan(self.OwnerDocument as TXMLDocument, AText);
@@ -1249,14 +1302,14 @@ begin
      AppendChild(result);
 end;
 
-function TOdfContent.AddSpan(AText: string; aStyle: string): TSpan;
+function TOdfContent.AddSpan(AText: UTF8String; aStyle: string): TSpan;
 begin
      result:=TSpan.CreateSpan(self.OwnerDocument as TXMLDocument, AText);
      result.SetStyle(aStyle);
      AppendChild(result);
 end;
 
-function TOdfContent.AddLink(AText: string; FontStyles: TFontStyles;
+function TOdfContent.AddLink(AText: UTF8String; FontStyles: TFontStyles;
   aBMName: string): THyperLink;
 begin
      if FontStyles=[] then
@@ -1267,6 +1320,16 @@ begin
           result.AddSpan(AText,FontStyles);
        end;
      AppendChild(result);
+end;
+
+function TOdfContent.GetStyle: TOdfStyleStyle;
+var
+  lattr: TDOMAttr;
+begin
+   result := nil;
+  lattr := GetAttribute(oatTextStyleName);
+  if assigned(lattr) then
+    result := TOdfTextDocument(OwnerDocument).SearchStyle(lattr.Value);
 end;
 
 function TOdfContent.GetCharacterContent(Recursive: boolean): string;
@@ -1399,6 +1462,16 @@ begin
            lStyleProp.SetAttribute(oatStyleTextLineThroughType,CSingle);
           end;
      end;
+// Page-Layout-Style
+   lStyle :=CreateOdfElement(oetStylePageLayout);
+   FAutomaticStyles.AppendChild(lStyle);
+
+   lStyle.SetAttribute(oatStyleName,'pm1');
+   FMasterPageProp := CreateOdfElement(oetStylePageLayoutProperties);
+   FMasterPageProp.SetAttributes([oatFoPageWidth,oatFoPageHeight,oatStylePrintOrientation,
+      oatFoMarginTop,oatFoMarginBottom,oatFoMarginLeft,oatFoMarginRight],
+      ['21cm','29.7cm','portrait','2cm','2cm','1.5cm','1.5cm']);
+   lStyle.AppendChild(FMasterPageProp);
 end;
 
 constructor TOdfTextDocument.Create;
@@ -1423,6 +1496,8 @@ begin
 end;
 
 function TOdfTextDocument.AddMasterStyle: TOdfStyleStyle;
+var
+  l: TOdfStyleDefaultStyle;
 begin
   Result := TOdfStyleStyle(TOdfElement(FMasterStyles).Find('Standard'));
   if not assigned(result) then
@@ -1431,7 +1506,9 @@ begin
       with result do
          begin
               OdfStyleName:='Standard';
-              OdfStyleFamily:='';
+              OdfStyleFamily:=OdfGetStyleFamilyValue(TStyleFamilyValue.sfvParagraph);
+              OdfStyleClass:='text';
+              SetAttribute(oatStylePageLayoutName, 'pm1');
          end;
      FMasterStyles.AppendChild(result);
     end;
@@ -1446,6 +1523,11 @@ function TOdfTextDocument.AddHeadline(aLevel: integer): TOdfContent;
 
 begin
   TodfSection(Ftext).AddHeadline(aLevel);
+end;
+
+function TOdfTextDocument.AddTOC(aName: string; aLevel: integer): TOdfContent;
+begin
+  TOdfSection(Ftext).AddTOC(aName,aLevel);
 end;
 
 function TOdfTextDocument.AddAutomaticStyle: TOdfStyleStyle;
@@ -1469,6 +1551,13 @@ begin
      result:=CreateStyle(aName,aFamily);
      FStyles.AppendChild(result);
     end;
+end;
+
+function TOdfTextDocument.AddFontFace(StyleName, SvgFontFamily,
+  FontFamilyGeneric, FontPitch: string): Todfelement;
+begin
+ result:= TFontFaceDecls(FFontFaceDecls)
+    .AddFontFace(StyleName, SvgFontFamily, FontFamilyGeneric, FontPitch);
 end;
 
 
@@ -1510,6 +1599,15 @@ begin
 
           result:=Assigned(AParagraph);
      end;
+end;
+
+function TOdfTextDocument.SearchStyle(aStyle: string): TodfStyleStyle;
+begin
+  Result := TOdfStyleStyle(TOdfElement(FMasterStyles).Find(aStyle,true));
+  if not assigned(result) then
+    Result := TOdfStyleStyle(TOdfElement(FStyles).Find(aStyle,true));
+  if not assigned(result) then
+    Result := TOdfStyleStyle(TOdfElement(FAutomaticStyles).Find(aStyle,true));
 end;
 
 { TOdfElement }
@@ -1657,6 +1755,27 @@ begin
              end;
 end;
 
+function TOdfElement.FindOdfElement(AType: TElementType): TOdfElement;
+
+var
+   vPrefix, vLocalname, vUri: string;
+   n: TDOMNode;
+begin
+     OdfElementGetNsAndName(AType, vPrefix, vLocalname, vUri);
+     result := Nil;
+
+     for n in self do
+         if (n is TDOMElement)
+         then
+             with (n as TDOMElement) do
+                  if (NamespaceURI = vUri) and (LocalName = vLocalname) then
+                     begin
+                   Result := n as TOdfElement;
+                      break;
+             end;
+end;
+
+
 function TOdfElement.Find(aName: String; recursive: boolean): TOdfElement;
 var
   lChlds, lNext: TDOMNode;
@@ -1666,10 +1785,12 @@ begin
    result := nil;
    while assigned(lChlds) and (lChlds<>lNext) do
       begin
-        if not (lChlds is TDOMElement)
+        if not (lChlds is TDOMElement) and not (lChlds is TDOMText)
         then
             raise Exception.Create('Unexpected Node Type: ' + lChlds.ClassName);
 
+        if not (lChlds is TDOMText) then
+           begin
         {for some reason lChlds.inheritsfrom(TOdfStyleStyle)=False !}
         if (TOdfElement(lChlds).GetAttributeString(oatStyleName)=aName)
         then
@@ -1684,7 +1805,7 @@ begin
         then
             exit(TOdfElement(lChlds));
 
-
+            end;
         if recursive
         then
           lChlds:=lChlds.GetNextNode
@@ -2183,6 +2304,18 @@ begin
      AOdf.InitBodyContent;
 end;
 
+procedure TOdfDocument.SetCountry(const AValue: String);
+begin
+  if FCountry=AValue then Exit;
+  FCountry:=AValue;
+end;
+
+procedure TOdfDocument.SetLanguage(const AValue: String);
+begin
+  if FLanguage=AValue then Exit;
+  FLanguage:=AValue;
+end;
+
 procedure TOdfDocument.SetXmlDocument(AValue: TXMLDocument);
 begin
   if assigned(FXmlDocument) then
@@ -2559,7 +2692,7 @@ begin
              oatFoFontSize, oatFoLanguage, oatFoCountry, oatStyleLetterKerning,
              oatFoHyphenate, oatFoHyphenationRemainCharCount,
              oatFoHyphenationPushCharCount],
-             ['true', 'Liberation Serif', '12pt', 'en', 'US', 'true',
+             ['true', 'Liberation Serif', '12pt', FLanguage, FCountry, 'true',
               'false', '2', '2']);
      end;
      FStyles.AppendChild(vStyle);
@@ -2629,7 +2762,8 @@ end;
 constructor TOdfDocument.Create;
 begin
      inherited Create;
-
+     FLanguage:='en';
+     FCountry:='US';
      InitXmlDocument;
 end;
 
