@@ -1,0 +1,3 @@
+[submodule "use/fpRelaxNG"]
+	path = use/fpRelaxNG
+	url = git@github.com:dgaspary/fpRelaxNG.git
